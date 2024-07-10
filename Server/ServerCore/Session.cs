@@ -16,6 +16,7 @@ namespace ServerCore
         public sealed override int OnRecv(ArraySegment<byte> buffer)
         {
             int processLen = 0;
+            int packetCount = 0;
 
             while (true)
             {
@@ -35,11 +36,16 @@ namespace ServerCore
                 //여기의 의미는 알아서 잘 파싱해서 사용하라고 넘겨주는 겁니다.
                 OnRecvPacket(new ArraySegment<byte>(buffer.Array, buffer.Offset, dataSize));
 
+                packetCount++;
+
                 //buffer의 유효범위가 ushort크기보다 크기 때문에 왼쪽으로 다시 집어서 찾는 부분을 옮겨줘야 합니다.
                 //즉, 다음 부분을 패킷 데이터의 사이즈를 찝어주는 겁니다.
                 processLen += dataSize;
                 buffer = new ArraySegment<byte>(buffer.Array, buffer.Offset + dataSize, buffer.Count - dataSize);
             }
+
+            if(packetCount > 1)
+                Console.WriteLine($"패킷 모아보내기 : {packetCount}");
 
             // 내가 처리 할 수 있는데까지 처리를 하다가 While문에서 break에 걸리면 내가 처리한 byte 수를 return 해줍니다.
             return processLen;
@@ -66,6 +72,15 @@ namespace ServerCore
         public abstract void OnSend(int numOfBytes);
         public abstract void OnDisConnected(EndPoint endPoint);
 
+        void Clear()
+        {
+            lock (_lock)
+            {
+                _sendQueue.Clear();
+                _pendingList.Clear();
+            }
+        }
+
         public void Start(Socket socket)
         {
             _socket = socket;
@@ -74,6 +89,21 @@ namespace ServerCore
             _sendArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnSendCompleted);
 
             RegisterRecv();
+        }
+
+        public void Send(List<ArraySegment<byte>> sendBuffList)
+        {
+            if (sendBuffList.Count == 0)
+                return;
+
+            lock (_lock)
+            {
+                foreach(ArraySegment<byte> sendBuff in sendBuffList)
+                    _sendQueue.Enqueue(sendBuff);
+
+                if (_pendingList.Count == 0)
+                    RegisterSend();
+            }
         }
 
         public void Send(ArraySegment<byte> sendBuff)
@@ -96,11 +126,15 @@ namespace ServerCore
             OnDisConnected(_socket.RemoteEndPoint);
             _socket.Shutdown(SocketShutdown.Both);
             _socket.Close();
+            Clear();
         }
 
         #region 네트워크 통신
         private void RegisterSend()
         {
+            if (_disconnected == 1)
+                return;
+
             while (_sendQueue.Count > 0)
             {
                 ArraySegment<byte> buff = _sendQueue.Dequeue();
@@ -109,9 +143,16 @@ namespace ServerCore
 
             _sendArgs.BufferList = _pendingList;
 
-            bool pending = _socket.SendAsync(_sendArgs);
-            if (pending == false)
-                OnSendCompleted(null, _sendArgs);
+            try
+            {
+                bool pending = _socket.SendAsync(_sendArgs);
+                if (pending == false)
+                    OnSendCompleted(null, _sendArgs);
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine($"RegisterSend Failed {e}");
+            }
         }
         
         private void OnSendCompleted(object sender, SocketAsyncEventArgs args)
@@ -147,14 +188,24 @@ namespace ServerCore
         //낚시대 RegisterRecv
         private void RegisterRecv()
         {
+            if (_disconnected == 1)
+                return;
+
             _recvBuffer.Clean();
             ArraySegment<byte> segment = _recvBuffer.WriteSegment;
             _recvArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
 
-            bool pending = _socket.ReceiveAsync(_recvArgs);
-            if (pending == false)
+            try
             {
-                OnRecvCompleted(null, _recvArgs);
+                bool pending = _socket.ReceiveAsync(_recvArgs);
+                if (pending == false)
+                {
+                    OnRecvCompleted(null, _recvArgs);
+                }
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine($"RegisterRecv Failed {e}");
             }
         }
 

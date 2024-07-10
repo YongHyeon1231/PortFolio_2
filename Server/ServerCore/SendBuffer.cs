@@ -10,7 +10,7 @@ namespace ServerCore
     public class SendBufferHelper
     {
         public static ThreadLocal<SendBuffer> CurrentBuffer = new ThreadLocal<SendBuffer>(() => { return null; });
-        public static int ChunkSize { get; set; } = 4096 * 100;
+        public static int ChunkSize { get; set; } = 65535 * 100;
         public static ArraySegment<byte> Open(int reserveSize)
         {
             // 만약 null이면 아직 CurrentBuffrer를 한번도 사용을 안한 셈이 되니까 하나를 만들어 줍니다.
