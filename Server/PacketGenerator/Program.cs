@@ -1,11 +1,10 @@
 ﻿using System;
 using System.IO;
-using System.Security.Cryptography.X509Certificates;
 using System.Xml;
 
 namespace PacketGenerator
 {
-    internal class Program
+    class Program
     {
         static string genPackets;
         static ushort packetId;
@@ -16,24 +15,16 @@ namespace PacketGenerator
 
         static void Main(string[] args)
         {
-            // 두칸 뒤로가서 찾도록 bin 폴더 전으로
-            // 지금 Debuf 폴더를 없애는 방법을 알 수가 없다.
             string pdlPath = "../../../PDL.xml";
 
             XmlReaderSettings settings = new XmlReaderSettings()
             {
                 IgnoreComments = true,
-                IgnoreWhitespace = true,
+                IgnoreWhitespace = true
             };
 
-            // args.Length가 1보다 크다 라는 것은 뭔가 프로그래밍을 실행할 때
-            // 인자로 뭔가를 넘겨줬다고 하면은 이라는 뜻 입니다.
-            // 그 념겨준 인자를 파싱해가지고 pdlPath에다가 넣어준 다음에
-            // 걔를 이용해서 기존에 있던 create를 이어가도록 합니다.
             if (args.Length >= 1)
-            {
                 pdlPath = args[0];
-            }
 
             using (XmlReader r = XmlReader.Create(pdlPath, settings))
             {
@@ -42,21 +33,17 @@ namespace PacketGenerator
                 while (r.Read())
                 {
                     if (r.Depth == 1 && r.NodeType == XmlNodeType.Element)
-                    {
                         ParsePacket(r);
-                    }
                     //Console.WriteLine(r.Name + " " + r["name"]);
                 }
+
+                string fileText = string.Format(PacketFormat.fileFormat, packetEnums, genPackets);
+                File.WriteAllText("GenPackets.cs", fileText);
+                string clientManagerText = string.Format(PacketFormat.managerFormat, clientRegister);
+                File.WriteAllText("ClientPacketManager.cs", clientManagerText);
+                string serverManagerText = string.Format(PacketFormat.managerFormat, serverRegister);
+                File.WriteAllText("ServerPacketManager.cs", serverManagerText);
             }
-
-            string fileText = string.Format(PacketFormat.fileFormat, packetEnums, genPackets);
-            File.WriteAllText("GenPackets.cs", fileText);
-            string clientManagerText = string.Format(PacketFormat.managerFormat, clientRegister);
-
-            File.WriteAllText("ClientPacketManager.cs", clientManagerText);
-            string serverManagerText = string.Format(PacketFormat.managerFormat, serverRegister);
-
-            File.WriteAllText("ServerPacketManager.cs", serverManagerText);
         }
 
         public static void ParsePacket(XmlReader r)
@@ -76,13 +63,10 @@ namespace PacketGenerator
                 Console.WriteLine("Packet without name");
                 return;
             }
-            // 여기 까지 오면 <packet name = "PlayerInfoReq"> 안으로 들어온 거고
-            // 이제 안에 packet 내용들을 긁어야 합니다.
 
             Tuple<string, string, string> t = ParseMembers(r);
-            genPackets += string.Format(PacketFormat.packetFormat, 
-                packetName, t.Item1, t.Item2, t.Item3);
-            packetEnums += string.Format(PacketFormat.packetEnumPacket, packetName, ++packetId) + Environment.NewLine + "\t";
+            genPackets += string.Format(PacketFormat.packetFormat, packetName, t.Item1, t.Item2, t.Item3);
+            packetEnums += string.Format(PacketFormat.packetEnumFormat, packetName, ++packetId) + Environment.NewLine + "\t";
 
             if (packetName.StartsWith("S_") || packetName.StartsWith("s_"))
                 clientRegister += string.Format(PacketFormat.managerRegisterFormat, packetName) + Environment.NewLine;
@@ -101,11 +85,10 @@ namespace PacketGenerator
             string readCode = "";
             string writeCode = "";
 
-            // r.Depth는 패킷의 상위 Depth
-            int depth = r.Depth + 1; // 파싱하려고 하는 애들의 정보
+            int depth = r.Depth + 1;
             while (r.Read())
             {
-                if (r.Depth != depth) // </packet> 를 만나면 나가는 작업
+                if (r.Depth != depth)
                     break;
 
                 string memberName = r["name"];
@@ -115,25 +98,23 @@ namespace PacketGenerator
                     return null;
                 }
 
-                //사실상 PDL.xml파일을 한줄 한줄 읽어오는데 한줄씩 띄는 코드를 넣어줍니다.
                 if (string.IsNullOrEmpty(memberCode) == false)
                     memberCode += Environment.NewLine;
-                if (string.IsNullOrEmpty(memberCode) == false)
+                if (string.IsNullOrEmpty(readCode) == false)
                     readCode += Environment.NewLine;
-                if (string.IsNullOrEmpty(memberCode) == false)
+                if (string.IsNullOrEmpty(writeCode) == false)
                     writeCode += Environment.NewLine;
-                //여기까지 오면은 이제 어떤 타입인지 알아야 합니다.
 
                 string memberType = r.Name.ToLower();
                 switch (memberType)
                 {
-                    case "bool":
                     case "byte":
                     case "sbyte":
                         memberCode += string.Format(PacketFormat.memberFormat, memberType, memberName);
                         readCode += string.Format(PacketFormat.readByteFormat, memberName, memberType);
                         writeCode += string.Format(PacketFormat.writeByteFormat, memberName, memberType);
                         break;
+                    case "bool":
                     case "short":
                     case "ushort":
                     case "int":

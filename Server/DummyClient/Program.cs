@@ -7,7 +7,7 @@ using ServerCore;
 
 namespace DummyClient
 {
-    internal class Program
+    class Program
     {
         static void Main(string[] args)
         {
@@ -19,7 +19,9 @@ namespace DummyClient
 
             Connector connector = new Connector();
 
-            connector.Connect(endPoint, () => { return SessionManager.Instance.Generate(); }, 100);
+            connector.Connect(endPoint, 
+                () => { return SessionManager.Instance.Generate(); }, 
+                100);
             
 
             while (true)
@@ -32,7 +34,7 @@ namespace DummyClient
                 {
                     Console.WriteLine(ex.ToString());
                 }
-                Thread.Sleep(100);
+                Thread.Sleep(250);
             }
         }
     }

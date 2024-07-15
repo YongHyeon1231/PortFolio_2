@@ -31,6 +31,8 @@ namespace Server
             _listener.Init(endPoint, () => { return SessionManager.Instance.Generate(); });
             Console.WriteLine("Listening...");
 
+            JobTimer.Instance.Push(FlushRoom);
+
             while (true)
             {
                 JobTimer.Instance.Flush();
